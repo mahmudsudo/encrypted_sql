@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 rusqlite = "0.31.0"
 sqlparser = "0.46.0"
+csv = "1.3.0"
 
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
