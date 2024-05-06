@@ -8,7 +8,14 @@ use tfhe::ClientKey;
 use tfhe::shortint::PBSParameters;
 
 struct EncryptedQuery {
+    sql: String,
+    conditions: Vec<EncryptedCondition>
+}
 
+struct EncryptedCondition {
+    left: Vec<u8>, // encrypted value
+    op: Vec<u8>, // encrypted operator
+    right: Vec<u8>, // encrypted value
 }
 
 struct EncryptedResult {
@@ -36,7 +43,18 @@ fn default_cpu_parameters() -> PBSParameters {
 }
 
 fn encrypt_query(query: sqlparser::ast::Select) -> EncryptedQuery {
-    todo!()
+    let mut encrypted_query = EncryptedQuery {
+        sql: query.to_string(),
+        conditions: Vec::new(),
+    };
+
+    encrypted_query.conditions.push(EncryptedCondition {
+        left,
+        op,
+        right,
+    });
+
+    encrypted_query
 }
 
 fn run_fhe_query(sks: &tfhe::integer::ServerKey, input: &EncryptedQuery, data: &Tables) -> EncryptedResult {
