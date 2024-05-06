@@ -1,0 +1,1 @@
+SELECT a, b, 123, myfunc(b) FROM table_1 
