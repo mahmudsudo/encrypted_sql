@@ -1,11 +1,12 @@
-pub mod database_server;
-
+use std::fs::read_dir;
 use std::path::Path;
-use database_server::Database;
-use sqlparser::{ast::Table, dialect::{self, GenericDialect}, parser::Parser};
-// use sqlparser::ast::FlushType::Tables;
+use std::collections::HashMap;
+
 use tfhe::ClientKey;
 use tfhe::shortint::PBSParameters;
+use crate::database_server::Database;
+
+pub mod database_server;
 
 struct EncryptedQuery {
     sql: String,
@@ -18,24 +19,68 @@ struct EncryptedCondition {
     right: Vec<u8>, // encrypted value
 }
 
-struct EncryptedResult {
-
-}
-
-fn main() {
-
-}
-
-fn load_tables(path : &Path) {
-    let dialect = GenericDialect {};
-     if let Ok(x) = std::fs::read_to_string(path){
-        let ast = Parser::parse_sql(&dialect, &x).unwrap();
-        println!("AST: {:?}", ast);
-     }
-}
+struct EncryptedResult {}
 
 struct Tables {
+    columns: HashMap<String, Column>,
+    rows: Vec<Row>,
+}
 
+struct Column {
+    name: String,
+    data_type: DataType,
+}
+
+enum DataType {
+    Integer(IntegerType),
+    Boolean,
+    String,
+}
+
+enum IntegerType {
+    Signed8,
+    Unsigned8,
+    Signed16,
+    Unsigned16,
+    Signed32,
+    Unsigned32,
+    Signed64,
+    Unsigned64,
+}
+
+struct Row {
+    values: Vec<Value>,
+}
+
+enum Value {
+    Integer(i64),
+    Boolean(bool),
+    String(String),
+}
+
+fn load_tables(path: &Path, db: &mut Database) -> Tables {
+    let mut tables = Tables::new();
+
+    for entry in read_dir(path).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+
+        if path.is_file() {
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            let table_name = file_name.trim_end_matches(".csv");
+
+            // Load the table from CSV file using the Database instance
+            db.load_table_from_csv(table_name, &path).unwrap();
+
+            // Assume we have a way to get the loaded table
+            let loaded_table = db.get_table(table_name).unwrap();
+
+            // Insert the loaded table into the Tables struct
+            tables.insert_row(table_name, loaded_table);
+        }
+    }
+
+    tables
 }
 
 fn default_cpu_parameters() -> PBSParameters {
@@ -63,4 +108,8 @@ fn run_fhe_query(sks: &tfhe::integer::ServerKey, input: &EncryptedQuery, data: &
 
 fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
     todo!()
+}
+
+fn main() {
+
 }

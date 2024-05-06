@@ -7,12 +7,13 @@ pub(crate) struct Database {
 }
 
 impl Database {
-   pub fn new() -> Result<Database> {
+    pub fn new() -> Result<Database, rusqlite::Error> {
         let conn = Connection::open_in_memory()?;
         conn.execute("CREATE TABLE integers (id INTEGER PRIMARY KEY, value INTEGER);",[])?;
         conn.execute("CREATE TABLE booleans (id INTEGER PRIMARY KEY, value BOOLEAN);",[])?;
         Ok(Database { conn })
     }
+
 
     pub fn insert_integer(&self, value: i32) -> Result<()> {
         self.conn.execute("INSERT INTO integers (value) VALUES (?);", (value,))?;
@@ -58,7 +59,7 @@ impl Database {
     }
 
     // Load a table from CSV file in the directory.
-    fn load_table_from_csv(&self, table_name: &str, file_path: &Path) -> Result<()> {
+    pub fn load_table_from_csv(&self, table_name: &str, file_path: &Path) -> Result<()> {
         let mut reader = csv::Reader::from_path(file_path)?;
 
         // Get the column names from the CSV file
@@ -96,5 +97,4 @@ impl Database {
 
         Ok(())
     }
-
 }
