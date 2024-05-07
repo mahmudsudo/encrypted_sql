@@ -9,6 +9,8 @@ use tfhe::integer::{ClientKey, ServerKey};
 use tfhe::prelude::*;
 use tfhe::shortint::PBSParameters;
 
+use tfhe::shortint::parameters::*;
+
 use crate::database_server::{AppError, Database};
 
 pub mod database_server;
@@ -108,7 +110,7 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
             let table_name = file_name.trim_end_matches(".csv");
 
             db.load_table_from_csv(&file_path)?;
-            
+
             if let Ok(loaded_data) = db.retrieve_table_data(&table_name) {
                 for row in loaded_data {
                     tables.insert_row(table_name, row);
@@ -149,7 +151,11 @@ fn main() {
     // Setup TFHE configuration
     let config = ConfigBuilder::default().build();
 
-    let (client_key, server_key) = generate_keys(&config);
+    // let (client_key, server_key) = generate_keys(&config);
+
+    let client_key = ClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+
+    // let server_key = ServerKey::new(&client_key);
 
     // Load the database
     let db = match Database::load_from_directory(db_path) {
