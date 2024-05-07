@@ -1,10 +1,10 @@
 # encrypted_sql
 
 # Roadmap
-- [ ] Setup database: sqlite db.
-- [ ] Make database accept the query as an input.
-- [ ] Implement the CUP Integer API methods, using TFHE-rs for encryption and decryption.
-- [ ] Implement loading the database from a directory with the specified structure (tables in CSV file).
+- [x] Setup database: sqlite db.
+- [x] Make database accept the query as an input.
+- [x] Implement loading the database from a directory with the specified structure (tables in CSV file).
+- [ ] Implement the CPU Integer API methods, using TFHE-rs for encryption and decryption.
 - [ ] Implement SQL select, select distinct, where, and, or, not, in, and between operations for encrypted queries
 - [ ] Manage operations for integers (<, <=, >, >=, =) and for strings (=).
 - [ ] Manage operations for integers (+, -, *, /, %) and for strings (+).
