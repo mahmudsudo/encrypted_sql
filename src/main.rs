@@ -32,7 +32,7 @@ impl EncryptedResult {
 }
 
 fn decrypt_byte(encrypted_byte: u8, client_key: &ClientKey) -> u8 {
-    // Simulate decryption, replace with actual decryption logic
+    // TODO: Simulate decryption, replace with actual decryption logic
     encrypted_byte  // Placeholder
 }
 
@@ -108,9 +108,7 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
             let table_name = file_name.trim_end_matches(".csv");
 
             db.load_table_from_csv(&file_path)?;
-
-            // Assume we have a function to retrieve loaded data as a vector of HashMaps (each HashMap represents a row)
-            // You need to implement this function if you haven't yet. It should pull data from your SQLite tables.
+            
             if let Ok(loaded_data) = db.retrieve_table_data(&table_name) {
                 for row in loaded_data {
                     tables.insert_row(table_name, row);
