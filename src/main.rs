@@ -174,22 +174,17 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
 
 /// This function will process an `EncryptedQuery` on set of data stored in `Tables`.
 /// It will be able to execute basic SQL operations on the data in an encrypted form, and return an `Encrypted Result`.
-fn run_fhe_query(
-    sks: &ServerKey,
-    input: &EncryptedQuery,
-    data: &Tables,
-) -> Result<EncryptedResult, Box<dyn Error>> {
+fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Result<EncryptedResult, Box<dyn Error>> {
     // 1. parse the encrypted query.
     // 2. perform encryption operations on the data (maybe scan through tables, select specific rows, apply filters, etc).
     // 3. return the encrypted result.
 
-    // lets assume its a simple SELECT * (we havent tried to decode yet, because of the encryption).
-
     let mut results = Vec::new();
 
-    for (table_name, rows) in &data.tables {
+    // Simulate processing: Here, I just iterate over tables and collect encrypted data.
+    for (_table_name, rows) in &data.tables {
         for row in rows {
-            for (column, encrypted_value) in row {
+            for (_column, encrypted_value) in row {
                 results.push(encrypted_value.as_bytes());
             }
         }
@@ -200,20 +195,12 @@ fn run_fhe_query(
     })
 }
 
-fn decrypt_result(
-    client_key: &ClientKey,
-    encrypted_result: &EncryptedResult,
-) -> Result<String, Box<dyn Error>> {
-    // Assuming encrypted_result.result is Vec<FheUint8>
-    // let decrypted_chars: Result<Vec<u8>, _> = encrypted_result.result.iter()
-    //     .map(|enc_char| enc_char.decrypt(client_key))
-    //     .collect();
-    //
-    // let decrypted_bytes = decrypted_chars?;
-    // let result_string = String::from_utf8(decrypted_bytes)?;
-    //
-    // Ok(result_string)
-    Ok("hello".to_string())
+fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
+    let decrypted_data = encrypted_result.result.iter()
+        .map(|data| client_key.decrypt(data))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(format!("Decrypted results: {:?}", decrypted_data))
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
