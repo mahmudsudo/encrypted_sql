@@ -1,0 +1,3 @@
+id:uint32,value:string,flag:bool
+3,"Another row!",true
+4,"Final row!",false

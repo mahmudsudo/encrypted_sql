@@ -1,0 +1,3 @@
+id:uint32,value:string,flag:bool
+1,"Hello, World!",true
+2,"Test, again!",false

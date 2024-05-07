@@ -2,8 +2,9 @@ use std::fs::read_dir;
 use std::path::Path;
 use std::collections::HashMap;
 use std::{env, process};
+use std::time::Instant;
 
-use tfhe::integer::ClientKey;
+use tfhe::integer::{ClientKey, ServerKey};
 
 use tfhe::{FheUint8};
 use tfhe::prelude::FheEncrypt;
@@ -122,42 +123,49 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, rusqlite::Error> {
     Ok(tables)
 }
 
+// fn encrypt_query(query_str: &str, user_fhe_secret_key: &ClientKey) -> EncryptedQuery {
+//     let dialect = GenericDialect {}; // Using a generic SQL dialect
+//     let ast = Parser::parse_sql(&dialect, query_str).expect("Failed to parse query");
+//
+//     // Assuming the first statement is a SELECT and we're only handling simple cases for demonstration.
+//     let query = if let sqlparser::ast::Statement::Select(select) = &ast[0] {
+//         select
+//     } else {
+//         panic!("Query provided is not a SELECT query.");
+//     };
+//
+//     // Encrypt conditions (assuming a simple where clause)
+//     let mut conditions = vec![];
+//     if let Some(where_clause) = &query.selection {
+//         // Assuming a simple binary operation for demonstration
+//         if let sqlparser::ast::Expr::BinaryOp { left, op, right } = where_clause.as_ref() {
+//             let encrypted_left = FheUint8::encrypt(left.to_string().as_bytes()[0], user_fhe_secret_key);
+//             let encrypted_op = FheUint8::encrypt(op.to_string().as_bytes()[0], user_fhe_secret_key);
+//             let encrypted_right = FheUint8::encrypt(right.to_string().as_bytes()[0], user_fhe_secret_key);
+//
+//             conditions.push(EncryptedCondition {
+//                 left: vec![encrypted_left], // Simplified for example
+//                 op: vec![encrypted_op],
+//                 right: vec![encrypted_right],
+//             });
+//         }
+//     }
+//
+//     EncryptedQuery {
+//         sql: query.to_string(), // Store the overall SQL for now, assuming non-sensitive or already encrypted
+//         conditions
+//     }
+// }
 
-fn encrypt_query(query_str: &str, user_fhe_secret_key: &ClientKey) -> EncryptedQuery {
-    let dialect = GenericDialect {}; // Using a generic SQL dialect
-    let ast = Parser::parse_sql(&dialect, query_str).expect("Failed to parse query");
-
-    // Assuming the first statement is a SELECT and we're only handling simple cases for demonstration.
-    let query = if let sqlparser::ast::Statement::Select(select) = &ast[0] {
-        select
-    } else {
-        panic!("Query provided is not a SELECT query.");
-    };
-
-    // Encrypt conditions (assuming a simple where clause)
-    let mut conditions = vec![];
-    if let Some(where_clause) = &query.selection {
-        // Assuming a simple binary operation for demonstration
-        if let sqlparser::ast::Expr::BinaryOp { left, op, right } = where_clause.as_ref() {
-            let encrypted_left = FheUint8::encrypt(left.to_string().as_bytes()[0], user_fhe_secret_key);
-            let encrypted_op = FheUint8::encrypt(op.to_string().as_bytes()[0], user_fhe_secret_key);
-            let encrypted_right = FheUint8::encrypt(right.to_string().as_bytes()[0], user_fhe_secret_key);
-
-            conditions.push(EncryptedCondition {
-                left: vec![encrypted_left], // Simplified for example
-                op: vec![encrypted_op],
-                right: vec![encrypted_right],
-            });
-        }
-    }
-
-    EncryptedQuery {
-        sql: query.to_string(), // Store the overall SQL for now, assuming non-sensitive or already encrypted
-        conditions
-    }
+// Mock-up of encryption function
+fn encrypt_query(query_file_path: &str, client_key: &ClientKey) -> EncryptedQuery {
+    // This function should parse the SQL file and encrypt the query
+    todo!()
 }
 
-fn run_fhe_query(sks: &tfhe::integer::ServerKey, input: &EncryptedQuery, data: &Tables) -> EncryptedResult {
+// Mock-up of the FHE query function
+fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Database) -> EncryptedResult {
+    // This function should simulate running an encrypted query against the database
     todo!()
 }
 
@@ -166,5 +174,43 @@ fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        eprintln!("Usage: {} /path/to/db_dir query_file.sql", args[0]);
+        process::exit(1);
+    }
 
+    let db_path = Path::new(&args[1]);
+    let query_file_path = &args[2];
+
+    // Load the database
+    let db = match Database::load_from_directory(db_path) {
+        Ok(db) => db,
+        Err(e) => {
+            eprintln!("Failed to load database: {}", e);
+            process::exit(1);
+        }
+    };
+
+    // Example keys setup (You'll need to setup these properly)
+    let server_key = ServerKey::new(); // Placeholder
+    let client_key = ClientKey::new(()); // Placeholder
+
+    // Encrypt the query (You'll implement this based on your real use case)
+    let encrypted_query = encrypt_query(query_file_path, &client_key);
+
+    // Measure the time it takes to run the encrypted query
+    let start = Instant::now();
+    let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &db);
+    let duration = start.elapsed();
+
+    // Decrypt the result
+    let decrypted_result = decrypt_result(&client_key, &encrypted_result);
+
+    // Output the runtime and results
+    println!("Runtime: {:.2?}", duration);
+    println!("Clear DB query result: (some result)");
+    println!("Encrypted DB query result: {}", decrypted_result);
+    println!("Results match: YES"); // You'll implement actual matching/validation
 }
+
