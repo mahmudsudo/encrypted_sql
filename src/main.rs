@@ -125,10 +125,25 @@ fn encrypt_query(query_path: &Path, client_key: &ClientKey) -> Result<EncryptedQ
 
 /// This function will process an `EncryptedQuery` on set of data stored in `Tables`.
 /// It will be able to execute basic SQL operations on the data in an encrypted form, and return an `Encrypted Result`.
-fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, _data: &Database) -> Result<EncryptedResult, Box<dyn Error>> {
-    // TODO: update this processing of encrypted query on encrypted data
+fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Result<EncryptedResult, Box<dyn Error>> {
+    // 1. parse the encrypted query.
+    // 2. perform encryption operations on the data (maybe scan through tables, select specific rows, apply filters, etc).
+    // 3. return the encrypted result.
+
+    // lets assume its a simple SELECT * (we havent tried to decode yet, because of the encryption).
+
+    let mut results = Vec::new();
+
+    for (table_name, rows) in &data.tables {
+        for row in rows {
+            for (column, encrypted_value) in row {
+                results.push(encrypted_value.as_bytes());
+            }
+        }
+    }
+
     Ok(EncryptedResult {
-        result: input.sql.iter().map(|fhe_uint8| fhe_uint8.clone()).collect() // Placeholder logic
+        result: results.concat(),
     })
 }
 
