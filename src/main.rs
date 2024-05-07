@@ -1,15 +1,7 @@
-use std::{env, process};
-use std::collections::HashMap;
-use std::fs::read_dir;
-use std::path::Path;
-use std::time::Instant;
+use std::{env, process,collections::HashMap,fs::read_dir,path::Path,time::Instant};
 
-use tfhe::{ConfigBuilder};
-use tfhe::integer::{ClientKey, ServerKey};
-use tfhe::prelude::*;
-use tfhe::shortint::PBSParameters;
+use tfhe::{generate_keys, ConfigBuilder,ClientKey, ServerKey,prelude::*,shortint::{PBSParameters,parameters::*}};
 
-use tfhe::shortint::parameters::*;
 
 use crate::database_server::{AppError, Database};
 
@@ -149,13 +141,9 @@ fn main() {
     let _query_file_path = Path::new(&args[2]);
 
     // Setup TFHE configuration
-    let _config = ConfigBuilder::default().build();
+    let config = ConfigBuilder::default().build();
 
-    // let (client_key, server_key) = generate_keys(&config);
-
-    let client_key = ClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
-
-    // let server_key = ServerKey::new(&client_key);
+    let (client_key, server_key) = generate_keys(config);
 
     // Load the database
     let _db = match Database::load_from_directory(db_path) {
