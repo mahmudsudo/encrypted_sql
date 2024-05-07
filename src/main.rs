@@ -1,17 +1,14 @@
+use std::{env, process};
+use std::collections::HashMap;
 use std::fs::read_dir;
 use std::path::Path;
-use std::collections::HashMap;
-use std::{env, process};
 use std::time::Instant;
 
 use tfhe::integer::{ClientKey, ServerKey};
-
-use tfhe::{FheUint8};
 use tfhe::prelude::FheEncrypt;
 use tfhe::shortint::PBSParameters;
+
 use crate::database_server::Database;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
 
 pub mod database_server;
 
@@ -158,7 +155,7 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, rusqlite::Error> {
 // }
 
 // Mock-up of encryption function
-fn encrypt_query(query_file_path: &str, client_key: &ClientKey) -> EncryptedQuery {
+fn encrypt_query(query_file_path: &Path, client_key: &ClientKey) -> EncryptedQuery {
     // This function should parse the SQL file and encrypt the query
     todo!()
 }
@@ -176,14 +173,14 @@ fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} /path/to/db_dir query_file.sql", args[0]);
+        eprintln!("Usage: {} /path/to/db_dir query.txt", args[0]);
         process::exit(1);
     }
 
     let db_path = Path::new(&args[1]);
-    let query_file_path = &args[2];
+    let query_file_path = Path::new(&args[2]);
 
-    // Load the database
+    // Example: Initialize your database and encryption systems here
     let db = match Database::load_from_directory(db_path) {
         Ok(db) => db,
         Err(e) => {
@@ -192,25 +189,23 @@ fn main() {
         }
     };
 
-    // Example keys setup (You'll need to setup these properly)
-    let server_key = ServerKey::new(); // Placeholder
-    let client_key = ClientKey::new(()); // Placeholder
+    // Example: Initialize Server and Client keys
+    let server_key = ServerKey::new_radix_server_key_from_shortint();  // Placeholder, replace with correct initialization
+    let client_key = ClientKey::new_radix_client_key_from_shortint();  // Placeholder, replace with correct initialization
 
-    // Encrypt the query (You'll implement this based on your real use case)
-    let encrypted_query = encrypt_query(query_file_path, &client_key);
+    // Assume we have a query in query_file_path that needs to be encrypted
+    let encrypted_query = encrypt_query(&query_file_path, &client_key);
 
-    // Measure the time it takes to run the encrypted query
+    // Running an FHE query
     let start = Instant::now();
     let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &db);
     let duration = start.elapsed();
 
-    // Decrypt the result
+    // Decrypting the result
     let decrypted_result = decrypt_result(&client_key, &encrypted_result);
 
-    // Output the runtime and results
     println!("Runtime: {:.2?}", duration);
-    println!("Clear DB query result: (some result)");
-    println!("Encrypted DB query result: {}", decrypted_result);
-    println!("Results match: YES"); // You'll implement actual matching/validation
+    println!("Clear DB query result: (some result)"); // Example placeholder
+    println!("Encrypted DB query result: {}", decrypted_result); // Example placeholder
+    println!("Results match: YES"); // Validation placeholder
 }
-
