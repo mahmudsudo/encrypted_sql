@@ -1,6 +1,7 @@
 use std::fs::read_dir;
 use std::path::Path;
 use std::collections::HashMap;
+use std::{env, process};
 
 use tfhe::integer::ClientKey;
 
@@ -8,6 +9,8 @@ use tfhe::{FheUint8};
 use tfhe::prelude::FheEncrypt;
 use tfhe::shortint::PBSParameters;
 use crate::database_server::Database;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
 
 pub mod database_server;
 
@@ -37,8 +40,25 @@ impl EncryptedResult {
 }
 
 struct Tables {
-    columns: HashMap<String, Column>,
-    rows: Vec<Row>,
+    // Assuming each table is stored with its name as a key
+    tables: HashMap<String, Vec<HashMap<String, String>>>,
+}
+
+impl Tables {
+    pub fn new() -> Tables {
+        Tables {
+            tables: HashMap::new(),
+        }
+    }
+
+    // Function to insert a row into a table
+    pub fn insert_row(&mut self, table_name: &str, row: HashMap<String, String>) {
+        if let Some(table) = self.tables.get_mut(table_name) {
+            table.push(row);
+        } else {
+            self.tables.insert(table_name.to_string(), vec![row]);
+        }
+    }
 }
 
 struct Column {
@@ -73,52 +93,68 @@ enum Value {
     String(String),
 }
 
-fn load_tables(path: &Path, db: &mut Database) -> Tables {
-    let mut tables = Tables::new();
-
-    for entry in read_dir(path).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        if path.is_file() {
-            let file_name = path.file_name().unwrap().to_str().unwrap();
-            let table_name = file_name.trim_end_matches(".csv");
-
-            // Load the table from CSV file using the Database instance
-            db.load_table_from_csv(table_name, &path).unwrap();
-
-            // Assume we have a way to get the loaded table
-            let loaded_table = db.get_table(table_name).unwrap();
-
-            // Insert the loaded table into the Tables struct
-            tables.insert_row(table_name, loaded_table);
-        }
-    }
-
-    tables
-}
-
 fn default_cpu_parameters() -> PBSParameters {
     todo!()
 }
 
-fn encrypt_query(query: sqlparser::ast::Select, user_fhe_secret_key: &ClientKey) -> EncryptedQuery {
-    let mut encrypted_query = EncryptedQuery {
-        sql: query.to_string(),
-        conditions: Vec::new(),
-    };
+fn load_tables(path: &Path, db: &Database) -> Result<Tables, rusqlite::Error> {
+    let mut tables = Tables::new();
 
-    let sql_bytes = query.to_string().as_bytes();
-    let mut encrypted_sql : Vec<u8> = Vec::new();
+    for entry in read_dir(path)? {
+        let entry = entry?;
+        let file_path = entry.path();
 
-    for b in sql_bytes {
-       let encrypted_b =  FheUint8::encrypt(*b, user_fhe_secret_key);
-        let b_u8 = encrypted_b;
+        if file_path.is_file() && file_path.extension().map_or(false, |e| e == "csv") {
+            let file_name = file_path.file_name().unwrap().to_str().unwrap();
+            let table_name = file_name.trim_end_matches(".csv");
+
+            // Load the table from CSV file using the Database instance
+            db.load_table_from_csv(&file_path)?;
+
+            // Assume we have a function to retrieve loaded data as a vector of HashMaps (each HashMap represents a row)
+            let loaded_data = db.retrieve_table_data(&table_name)?;
+            for row in loaded_data {
+                tables.insert_row(table_name, row);
+            }
+        }
     }
 
-    encrypted_query.sql = encrypted_sql;
+    Ok(tables)
+}
 
-    encrypted_query
+
+fn encrypt_query(query_str: &str, user_fhe_secret_key: &ClientKey) -> EncryptedQuery {
+    let dialect = GenericDialect {}; // Using a generic SQL dialect
+    let ast = Parser::parse_sql(&dialect, query_str).expect("Failed to parse query");
+
+    // Assuming the first statement is a SELECT and we're only handling simple cases for demonstration.
+    let query = if let sqlparser::ast::Statement::Select(select) = &ast[0] {
+        select
+    } else {
+        panic!("Query provided is not a SELECT query.");
+    };
+
+    // Encrypt conditions (assuming a simple where clause)
+    let mut conditions = vec![];
+    if let Some(where_clause) = &query.selection {
+        // Assuming a simple binary operation for demonstration
+        if let sqlparser::ast::Expr::BinaryOp { left, op, right } = where_clause.as_ref() {
+            let encrypted_left = FheUint8::encrypt(left.to_string().as_bytes()[0], user_fhe_secret_key);
+            let encrypted_op = FheUint8::encrypt(op.to_string().as_bytes()[0], user_fhe_secret_key);
+            let encrypted_right = FheUint8::encrypt(right.to_string().as_bytes()[0], user_fhe_secret_key);
+
+            conditions.push(EncryptedCondition {
+                left: vec![encrypted_left], // Simplified for example
+                op: vec![encrypted_op],
+                right: vec![encrypted_right],
+            });
+        }
+    }
+
+    EncryptedQuery {
+        sql: query.to_string(), // Store the overall SQL for now, assuming non-sensitive or already encrypted
+        conditions
+    }
 }
 
 fn run_fhe_query(sks: &tfhe::integer::ServerKey, input: &EncryptedQuery, data: &Tables) -> EncryptedResult {
@@ -130,20 +166,5 @@ fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
 }
 
 fn main() {
-    // Load tables from directory
-    let tables = load_tables(Path::new("/path/to/db_dir"));
 
-    // Encrypt query
-    let query = sqlparser::parser::Parser::parse_sql(sqlparser::dialect::GenericDialect, "SELECT * FROM table_name").unwrap().pop().unwrap();
-    let encrypted_query = encrypt_query(query);
-
-    // Run FHE query
-    let sks = // Load or generate your server key here
-    let result = run_fhe_query(&sks, &encrypted_query, &tables);
-
-    // Decrypt result
-    let client_key = '';// TODO: Load or generate the client key here
-    let clear_result = decrypt_result(&client_key, &result);
-
-    println!("Clear DB query result: {}", clear_result);
 }
