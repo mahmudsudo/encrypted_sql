@@ -130,5 +130,20 @@ fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
 }
 
 fn main() {
+    // Load tables from directory
+    let tables = load_tables(Path::new("/path/to/db_dir"));
 
+    // Encrypt query
+    let query = sqlparser::parser::Parser::parse_sql(sqlparser::dialect::GenericDialect, "SELECT * FROM table_name").unwrap().pop().unwrap();
+    let encrypted_query = encrypt_query(query);
+
+    // Run FHE query
+    let sks = // Load or generate your server key here
+    let result = run_fhe_query(&sks, &encrypted_query, &tables);
+
+    // Decrypt result
+    let client_key = '';// TODO: Load or generate the client key here
+    let clear_result = decrypt_result(&client_key, &result);
+
+    println!("Clear DB query result: {}", clear_result);
 }
