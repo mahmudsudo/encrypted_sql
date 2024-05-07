@@ -4,7 +4,7 @@ use std::fs::read_dir;
 use std::path::Path;
 use std::time::Instant;
 
-use tfhe::{ConfigBuilder, generate_keys};
+use tfhe::{ConfigBuilder};
 use tfhe::integer::{ClientKey, ServerKey};
 use tfhe::prelude::*;
 use tfhe::shortint::PBSParameters;
@@ -33,7 +33,7 @@ impl EncryptedResult {
     }
 }
 
-fn decrypt_byte(encrypted_byte: u8, client_key: &ClientKey) -> u8 {
+fn decrypt_byte(encrypted_byte: u8, _client_key: &ClientKey) -> u8 {
     // TODO: Simulate decryption, replace with actual decryption logic
     encrypted_byte  // Placeholder
 }
@@ -123,18 +123,18 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
 }
 
 // Mock-up of encryption function
-fn encrypt_query(query_file_path: &Path, client_key: &ClientKey) -> EncryptedQuery {
+fn encrypt_query(_query_file_path: &Path, _client_key: &ClientKey) -> EncryptedQuery {
     // This function should parse the SQL file and encrypt the query
     todo!()
 }
 
 // Mock-up of the FHE query function
-fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Database) -> EncryptedResult {
+fn run_fhe_query(_sks: &ServerKey, _input: &EncryptedQuery, _data: &Database) -> EncryptedResult {
     // This function should simulate running an encrypted query against the database
     todo!()
 }
 
-fn decrypt_result(clientk_key: &ClientKey, result: &EncryptedResult) -> String {
+fn decrypt_result(_clientk_key: &ClientKey, _result: &EncryptedResult) -> String {
     todo!()
 }
 
@@ -146,10 +146,10 @@ fn main() {
     }
 
     let db_path = Path::new(&args[1]);
-    let query_file_path = Path::new(&args[2]);
+    let _query_file_path = Path::new(&args[2]);
 
     // Setup TFHE configuration
-    let config = ConfigBuilder::default().build();
+    let _config = ConfigBuilder::default().build();
 
     // let (client_key, server_key) = generate_keys(&config);
 
@@ -158,7 +158,7 @@ fn main() {
     // let server_key = ServerKey::new(&client_key);
 
     // Load the database
-    let db = match Database::load_from_directory(db_path) {
+    let _db = match Database::load_from_directory(db_path) {
         Ok(db) => db,
         Err(e) => {
             eprintln!("Failed to load database: {}", e);
@@ -167,7 +167,7 @@ fn main() {
     };
 
     // Encrypt the query (placeholder, replace with actual encryption)
-    let encrypted_query = EncryptedQuery {
+    let _encrypted_query = EncryptedQuery {
         sql: "SELECT * FROM integers;".to_string(),  // Placeholder, not encrypted
     };
 
