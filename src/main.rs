@@ -145,10 +145,6 @@ fn main() {
 
     let (client_key, server_key) = generate_keys(config);
 
-    // let client_key = ClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
-
-    // // let server_key = ServerKey::new(&client_key);
-
     // Load the database
     let _db = match Database::load_from_directory(db_path) {
         Ok(db) => db,
