@@ -1,1 +1,1 @@
-SELECT a, b, 123, myfunc(b) FROM table_1 
+SELECT id FROM table_1

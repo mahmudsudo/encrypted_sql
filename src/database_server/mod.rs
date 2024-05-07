@@ -3,8 +3,8 @@ use std::fmt;
 use std::fs::read_dir;
 use std::path::Path;
 
-use rusqlite::{Connection, Result};
 use crate::Tables;
+use rusqlite::{Connection, Result};
 
 #[derive(Debug)]
 pub(crate) enum AppError {
@@ -48,8 +48,14 @@ pub(crate) struct Database {
 impl Database {
     pub fn new() -> Result<Database, AppError> {
         let conn = Connection::open_in_memory()?;
-        conn.execute("CREATE TABLE integers (id INTEGER PRIMARY KEY, value INTEGER);", [])?;
-        conn.execute("CREATE TABLE booleans (id INTEGER PRIMARY KEY, value BOOLEAN);", [])?;
+        conn.execute(
+            "CREATE TABLE integers (id INTEGER PRIMARY KEY, value INTEGER);",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE booleans (id INTEGER PRIMARY KEY, value BOOLEAN);",
+            [],
+        )?;
         Ok(Database { conn })
     }
 
@@ -75,7 +81,11 @@ impl Database {
     // Load a table from a CSV file in the directory.
     pub fn load_table_from_csv(&self, file_path: &Path) -> Result<(), AppError> {
         let mut reader = csv::Reader::from_path(file_path)?;
-        let headers = reader.headers()?.iter().map(|h| h.split(':').next().unwrap().to_string()).collect::<Vec<String>>();
+        let headers = reader
+            .headers()?
+            .iter()
+            .map(|h| h.split(':').next().unwrap().to_string())
+            .collect::<Vec<String>>();
 
         let table_name = file_path.file_stem().unwrap().to_str().unwrap();
         println!("Processing CSV for table: {}", table_name);
@@ -84,8 +94,16 @@ impl Database {
 
         for record in reader.records() {
             let record = record?;
-            let values: Vec<String> = record.iter().map(|value| format!("'{}'", value.replace("'", "''"))).collect();
-            let sql = format!("INSERT INTO {} ({}) VALUES ({});", table_name, headers.join(","), values.join(","));
+            let values: Vec<String> = record
+                .iter()
+                .map(|value| format!("'{}'", value.replace("'", "''")))
+                .collect();
+            let sql = format!(
+                "INSERT INTO {} ({}) VALUES ({});",
+                table_name,
+                headers.join(","),
+                values.join(",")
+            );
             println!("Executing SQL: {}", sql);
             self.conn.execute(&sql, []).map_err(AppError::Sqlite)?;
         }
@@ -98,25 +116,39 @@ impl Database {
         let table_name = file_path.file_stem().unwrap().to_str().unwrap();
         println!("Ensuring table structure for: {}", table_name);
 
-        let sql_check_table_exists = format!("SELECT name FROM sqlite_master WHERE type='table' AND name=?;");
-        let table_exists: bool = self.conn.query_row(&sql_check_table_exists, &[table_name], |_| Ok(())).is_ok();
+        let sql_check_table_exists =
+            format!("SELECT name FROM sqlite_master WHERE type='table' AND name=?;");
+        let table_exists: bool = self
+            .conn
+            .query_row(&sql_check_table_exists, &[table_name], |_| Ok(()))
+            .is_ok();
 
         if !table_exists {
             println!("Table does not exist. Creating new table: {}", table_name);
 
-            let column_definitions: Vec<String> = headers.iter().map(|header| {
-                let parts: Vec<&str> = header.split(':').collect();
-                format!("{} {}", parts[0], match parts.get(1) {
-                    Some(&"uint32") | Some(&"int32") | Some(&"uint16") | Some(&"int16") | Some(&"uint8") | Some(&"int8") => "INTEGER",
-                    Some(&"bool") => "BOOLEAN",
-                    Some(&"string") => "TEXT",
-                    _ => "TEXT",
+            let column_definitions: Vec<String> = headers
+                .iter()
+                .map(|header| {
+                    let parts: Vec<&str> = header.split(':').collect();
+                    format!(
+                        "{} {}",
+                        parts[0],
+                        match parts.get(1) {
+                            Some(&"uint32") | Some(&"int32") | Some(&"uint16") | Some(&"int16")
+                            | Some(&"uint8") | Some(&"int8") => "INTEGER",
+                            Some(&"bool") => "BOOLEAN",
+                            Some(&"string") => "TEXT",
+                            _ => "TEXT",
+                        }
+                    )
                 })
-            }).collect();
+                .collect();
 
             let columns_sql = column_definitions.join(", ");
             let sql_create_table = format!("CREATE TABLE {} ({});", table_name, columns_sql);
-            self.conn.execute(&sql_create_table, []).map_err(AppError::Sqlite)?;
+            self.conn
+                .execute(&sql_create_table, [])
+                .map_err(AppError::Sqlite)?;
             println!("Table created successfully: {}", table_name);
         } else {
             println!("Table {} already exists. Skipping creation.", table_name);
@@ -126,21 +158,27 @@ impl Database {
     }
 
     // Retrieves data from a named table and converts each row into a HashMap.
-    pub fn retrieve_table_data(&self, table_name: &str) -> Result<Vec<HashMap<String, String>>, AppError> {
-        let mut stmt = self.conn.prepare(&format!("SELECT * FROM {}", table_name))
+    pub fn retrieve_table_data(
+        &self,
+        table_name: &str,
+    ) -> Result<Vec<HashMap<String, String>>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT * FROM {}", table_name))
             .map_err(AppError::Sqlite)?;
 
-        let rows = stmt.query_map([], |row| {
-            let mut result = HashMap::new();
-            // Assume columns are known or dynamically determined.
-            result.insert("column_name".to_string(), row.get::<_, String>("column_name").unwrap());
-            Ok(result)
-        }).map_err(AppError::Sqlite)?;
+        let rows = stmt
+            .query_map([], |row| {
+                let mut result = HashMap::new();
+                // Assume columns are known or dynamically determined.
+                result.insert("id".to_string(), row.get::<_, String>("id").unwrap());
+                Ok(result)
+            })
+            .map_err(AppError::Sqlite)?;
 
         // Map each row result from rusqlite::Error to AppError and collect
-        rows.map(|row_result| {
-            row_result.map_err(AppError::Sqlite)
-        }).collect()
+        rows.map(|row_result| row_result.map_err(AppError::Sqlite))
+            .collect()
     }
 
     // Additional method to convert the database content to the Tables structure
@@ -148,7 +186,9 @@ impl Database {
         let mut tables = Tables::new();
 
         // First, get all table names from the database
-        let mut stmt = self.conn.prepare("SELECT name FROM sqlite_master WHERE type='table';")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table';")?;
         let table_names = stmt.query_map([], |row| {
             let name: String = row.get(0)?;
             Ok(name)
