@@ -129,7 +129,9 @@ fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Resu
     // 1. parse the encrypted query.
     // 2. perform encryption operations on the data (maybe scan through tables, select specific rows, apply filters, etc).
     // 3. return the encrypted result.
-    
+
+    // lets assume its a simple SELECT * (we havent tried to decode yet, because of the encryption).
+
     let mut results = Vec::new();
 
     for (table_name, rows) in &data.tables {
