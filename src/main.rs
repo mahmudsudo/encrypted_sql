@@ -24,11 +24,6 @@ struct EncryptedResult {
     result: Vec<u8>,
 }
 
-fn decrypt_byte(encrypted_byte: u8, _client_key: &ClientKey) -> u8 {
-    // TODO: Simulate decryption, replace with actual decryption logic
-    encrypted_byte  // Placeholder
-}
-
 struct Tables {
     // Assuming each table is stored with its name as a key
     tables: HashMap<String, Vec<HashMap<String, String>>>,
@@ -128,6 +123,8 @@ fn encrypt_query(query_path: &Path, client_key: &ClientKey) -> Result<EncryptedQ
     Ok(EncryptedQuery { sql: encrypted_data })
 }
 
+/// This function will process an `EncryptedQuery` on set of data stored in `Tables`.
+/// It will be able to execute basic SQL operations on the data in an encrypted form, and return an `Encrypted Result`.
 fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, _data: &Database) -> Result<EncryptedResult, Box<dyn Error>> {
     // TODO: update this processing of encrypted query on encrypted data
     Ok(EncryptedResult {
