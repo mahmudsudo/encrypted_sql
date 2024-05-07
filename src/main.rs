@@ -2,7 +2,10 @@ use std::fs::read_dir;
 use std::path::Path;
 use std::collections::HashMap;
 
-use tfhe::ClientKey;
+use tfhe::integer::ClientKey;
+
+use tfhe::{FheUint8};
+use tfhe::prelude::FheEncrypt;
 use tfhe::shortint::PBSParameters;
 use crate::database_server::Database;
 
@@ -19,7 +22,19 @@ struct EncryptedCondition {
     right: Vec<u8>, // encrypted value
 }
 
-struct EncryptedResult {}
+struct EncryptedResult {
+    result: Vec<u8>,
+}
+
+impl EncryptedResult {
+    // Decrypt the EncryptedResult
+    fn decrypt_result(client_key: &ClientKey, result: &EncryptedResult) -> String {
+        let decrypted_values: Vec<u8> = result.result.iter()
+            .map(|encrypted_value| encrypted_value.decrypt(client_key))
+            .collect();
+        String::from_utf8_lossy(&decrypted_values).to_string()
+    }
+}
 
 struct Tables {
     columns: HashMap<String, Column>,
@@ -87,17 +102,21 @@ fn default_cpu_parameters() -> PBSParameters {
     todo!()
 }
 
-fn encrypt_query(query: sqlparser::ast::Select) -> EncryptedQuery {
+fn encrypt_query(query: sqlparser::ast::Select, user_fhe_secret_key: &ClientKey) -> EncryptedQuery {
     let mut encrypted_query = EncryptedQuery {
         sql: query.to_string(),
         conditions: Vec::new(),
     };
 
-    encrypted_query.conditions.push(EncryptedCondition {
-        left,
-        op,
-        right,
-    });
+    let sql_bytes = query.to_string().as_bytes();
+    let mut encrypted_sql : Vec<u8> = Vec::new();
+
+    for b in sql_bytes {
+       let encrypted_b =  FheUint8::encrypt(*b, user_fhe_secret_key);
+        let b_u8 = encrypted_b;
+    }
+
+    encrypted_query.sql = encrypted_sql;
 
     encrypted_query
 }
