@@ -4,6 +4,7 @@ use std::fs::read_dir;
 use std::path::Path;
 
 use rusqlite::{Connection, Result};
+use crate::Tables;
 
 #[derive(Debug)]
 pub(crate) enum AppError {
@@ -140,5 +141,26 @@ impl Database {
         rows.map(|row_result| {
             row_result.map_err(AppError::Sqlite)
         }).collect()
+    }
+
+    // Additional method to convert the database content to the Tables structure
+    pub fn to_tables(&self) -> Result<Tables, AppError> {
+        let mut tables = Tables::new();
+
+        // First, get all table names from the database
+        let mut stmt = self.conn.prepare("SELECT name FROM sqlite_master WHERE type='table';")?;
+        let table_names = stmt.query_map([], |row| {
+            let name: String = row.get(0)?;
+            Ok(name)
+        })?;
+
+        // Iterate over each table name and retrieve its data
+        for table_name in table_names {
+            let table_name = table_name?;
+            let data = self.retrieve_table_data(&table_name)?;
+            tables.tables.insert(table_name, data);
+        }
+
+        Ok(tables)
     }
 }
