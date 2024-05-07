@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::read_dir;
 use std::path::Path;
@@ -5,7 +6,7 @@ use std::path::Path;
 use rusqlite::{Connection, Result};
 
 #[derive(Debug)]
-enum AppError {
+pub(crate) enum AppError {
     Sqlite(rusqlite::Error),
     Io(std::io::Error),
     Csv(csv::Error),
@@ -130,5 +131,23 @@ impl Database {
         }
 
         Ok(())
+    }
+
+    // Retrieves data from a named table and converts each row into a HashMap.
+    pub fn retrieve_table_data(&self, table_name: &str) -> Result<Vec<HashMap<String, String>>, AppError> {
+        let mut stmt = self.conn.prepare(&format!("SELECT * FROM {}", table_name))
+            .map_err(AppError::Sqlite)?;
+
+        let rows = stmt.query_map([], |row| {
+            let mut result = HashMap::new();
+            // Assume columns are known or dynamically determined.
+            result.insert("column_name".to_string(), row.get::<_, String>("column_name").unwrap());
+            Ok(result)
+        }).map_err(AppError::Sqlite)?;
+
+        // Map each row result from rusqlite::Error to AppError and collect
+        rows.map(|row_result| {
+            row_result.map_err(AppError::Sqlite)
+        }).collect()
     }
 }
