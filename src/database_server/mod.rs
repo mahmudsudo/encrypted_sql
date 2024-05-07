@@ -54,12 +54,16 @@ impl Database {
 
     pub fn load_from_directory(path: &Path) -> Result<Database, AppError> {
         let db = Database::new()?;
+        println!("Database initialized in memory.");
 
-        for entry in read_dir(path)? {
-            let entry = entry?;
+        let entries = read_dir(path).map_err(AppError::Io)?;
+        for entry in entries {
+            let entry = entry.map_err(AppError::Io)?;
             let file_path = entry.path();
+            println!("Considering file: {}", file_path.display());
 
             if file_path.is_file() && file_path.extension().unwrap_or_default() == "csv" {
+                println!("Loading CSV file: \"{}\"", file_path.display());
                 db.load_table_from_csv(&file_path)?;
             }
         }
@@ -70,15 +74,19 @@ impl Database {
     // Load a table from a CSV file in the directory.
     pub fn load_table_from_csv(&self, file_path: &Path) -> Result<(), AppError> {
         let mut reader = csv::Reader::from_path(file_path)?;
-        let headers = reader.headers()?.iter().map(String::from).collect::<Vec<String>>();
+        let headers = reader.headers()?.iter().map(|h| h.split(':').next().unwrap().to_string()).collect::<Vec<String>>();
+
+        let table_name = file_path.file_stem().unwrap().to_str().unwrap();
+        println!("Processing CSV for table: {}", table_name);
 
         self.ensure_table(&headers, file_path)?;
 
         for record in reader.records() {
             let record = record?;
             let values: Vec<String> = record.iter().map(|value| format!("'{}'", value.replace("'", "''"))).collect();
-            let sql = format!("INSERT INTO my_table ({}) VALUES ({});", headers.join(","), values.join(","));
-            self.conn.execute(&sql, [])?;
+            let sql = format!("INSERT INTO {} ({}) VALUES ({});", table_name, headers.join(","), values.join(","));
+            println!("Executing SQL: {}", sql);
+            self.conn.execute(&sql, []).map_err(AppError::Sqlite)?;
         }
 
         Ok(())
@@ -87,25 +95,30 @@ impl Database {
     // Ensure a table exists with the appropriate columns and types based on CSV headers
     pub fn ensure_table(&self, headers: &[String], file_path: &Path) -> Result<(), AppError> {
         let table_name = file_path.file_stem().unwrap().to_str().unwrap();
+        println!("Ensuring table structure for: {}", table_name);
 
-        let exists = self.conn.query_row(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
-            &[table_name],
-            |_| Ok(())
-        ).is_ok();
+        let sql_check_table_exists = format!("SELECT name FROM sqlite_master WHERE type='table' AND name=?;");
+        let table_exists: bool = self.conn.query_row(&sql_check_table_exists, &[table_name], |_| Ok(())).is_ok();
 
-        if !exists {
-            let columns_sql = headers.iter().map(|header| {
+        if !table_exists {
+            println!("Table does not exist. Creating new table: {}", table_name);
+
+            let column_definitions: Vec<String> = headers.iter().map(|header| {
                 let parts: Vec<&str> = header.split(':').collect();
                 format!("{} {}", parts[0], match parts.get(1) {
-                    Some(&"uint32") => "INTEGER",
+                    Some(&"uint32") | Some(&"int32") | Some(&"uint16") | Some(&"int16") | Some(&"uint8") | Some(&"int8") => "INTEGER",
                     Some(&"bool") => "BOOLEAN",
                     Some(&"string") => "TEXT",
                     _ => "TEXT",
                 })
-            }).collect::<Vec<String>>().join(", ");
-            let sql = format!("CREATE TABLE {} (id INTEGER PRIMARY KEY AUTOINCREMENT, {});", table_name, columns_sql);
-            self.conn.execute(&sql, [])?;
+            }).collect();
+
+            let columns_sql = column_definitions.join(", ");
+            let sql_create_table = format!("CREATE TABLE {} ({});", table_name, columns_sql);
+            self.conn.execute(&sql_create_table, []).map_err(AppError::Sqlite)?;
+            println!("Table created successfully: {}", table_name);
+        } else {
+            println!("Table {} already exists. Skipping creation.", table_name);
         }
 
         Ok(())
