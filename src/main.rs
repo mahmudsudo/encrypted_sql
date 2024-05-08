@@ -1,22 +1,86 @@
-use std::{collections::HashMap, env, fmt, fs, fs::read_dir, path::Path, process, time::Instant};
+use sqlparser::ast::{Expr, Query, SelectItem, SetExpr, Statement, TableFactor};
 use std::error::Error;
 use std::fmt::Debug;
+use std::{collections::HashMap, env, fmt, fs, fs::read_dir, path::Path, process, time::Instant};
 
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
-use tfhe::{ClientKey, ConfigBuilder, FheUint8, generate_keys, prelude::*, ServerKey, shortint::{parameters::*, PBSParameters}};
+use tfhe::{
+    generate_keys,
+    prelude::*,
+    shortint::{parameters::*, PBSParameters},
+    ClientKey, ConfigBuilder, FheUint8, ServerKey,
+};
 
 use crate::database_server::{AppError, Database};
 
 pub mod database_server;
 
 struct EncryptedQuery {
-    sql: Vec<FheUint8>, // Vector of encrypted characters.
+    encrypted_elements: Vec<FheUint8>, // Vector of encrypted characters.
+}
+
+impl EncryptedQuery {
+    // Encrypt a SQL query by parsing and encrypting its components
+    pub fn encrypt_query(
+        query_path: &Path,
+        client_key: &ClientKey,
+    ) -> Result<Self, Box<dyn Error>> {
+        let query = fs::read_to_string(query_path)?;
+        let dialect = GenericDialect {};
+        let ast = Parser::parse_sql(&dialect, &query)?;
+        eprintln!("AST structure is : {:?}", ast);
+        let mut encrypted_elements = Vec::new();
+
+        // Process different parts of the SQL query
+        if let Some(Statement::Query(ref query)) = ast.first() {
+            if let SetExpr::Select(ref select) = *query.body {
+                for item in &select.projection {
+                    match item {
+                        SelectItem::UnnamedExpr(x) => {
+                            match x {
+                                Expr::Identifier(el) => {
+                                    if let Ok(num) = el.value.parse::<u8>() {
+                                        encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                                    }
+                                }
+                                Expr::Wildcard => {
+                                    encrypted_elements.push(FheUint8::encrypt(b'*', client_key));
+                                }
+                               _ => {}
+                            }
+                        }
+                        SelectItem::Wildcard(x) => {
+                            encrypted_elements.push(FheUint8::encrypt(b'*', client_key));
+                        }
+                        _ => (),
+                    }
+                }
+                for item in &select.from{
+                    match &item.relation{
+                        TableFactor::Table { name ,.. } => {
+                            if let Ok(num) = name.0[0].value.parse::<u8>() {
+                                encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                            }
+                        }
+                        _ =>{}
+                    }
+                }
+            }
+        }
+        eprintln!("encryted query vector : done");
+        Ok(EncryptedQuery { encrypted_elements })
+    }
 }
 
 impl fmt::Display for EncryptedQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Encrypted SQL Query")
+        Ok(
+            for _el in self.encrypted_elements.iter(){
+            return write!(f, "Encrypted SQL Query " );
+            }
+        )
+
     }
 }
 
@@ -108,21 +172,6 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
     Ok(tables)
 }
 
-fn encrypt_query(query_path: &Path, client_key: &ClientKey) -> Result<EncryptedQuery, Box<dyn std::error::Error>> {
-    let query = fs::read_to_string(query_path)?;
-    let dialect = GenericDialect {};
-    let _ast = Parser::parse_sql(&dialect, &*query)?;
-
-    let encrypted_data: Vec<FheUint8> = query.chars()
-        .map(|c| {
-            let encrypted_char = FheUint8::encrypt(c as u8, client_key);
-            encrypted_char
-        })
-        .collect();
-
-    Ok(EncryptedQuery { sql: encrypted_data })
-}
-
 /// This function will process an `EncryptedQuery` on set of data stored in `Tables`.
 /// It will be able to execute basic SQL operations on the data in an encrypted form, and return an `Encrypted Result`.
 fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Result<EncryptedResult, Box<dyn Error>> {
@@ -130,13 +179,12 @@ fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Resu
     // 2. perform encryption operations on the data (maybe scan through tables, select specific rows, apply filters, etc).
     // 3. return the encrypted result.
 
-    // lets assume its a simple SELECT * (we havent tried to decode yet, because of the encryption).
-
     let mut results = Vec::new();
 
-    for (table_name, rows) in &data.tables {
+    // Simulate processing: Here, I just iterate over tables and collect encrypted data.
+    for (_table_name, rows) in &data.tables {
         for row in rows {
-            for (column, encrypted_value) in row {
+            for (_column, encrypted_value) in row {
                 results.push(encrypted_value.as_bytes());
             }
         }
@@ -148,54 +196,49 @@ fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Resu
 }
 
 fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
-    // Assuming encrypted_result.result is Vec<FheUint8>
-    let decrypted_chars: Result<Vec<u8>, _> = encrypted_result.result.iter()
-        .map(|enc_char| enc_char.decrypt(client_key))
-        .collect();
+    let decrypted_data = encrypted_result.result.iter()
+        .map(|data| client_key.decrypt(data))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    let decrypted_bytes = decrypted_chars?;
-    let result_string = String::from_utf8(decrypted_bytes)?;
-
-    Ok(result_string)
+    Ok(format!("Decrypted results: {:?}", decrypted_data))
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         eprintln!("Usage: {} /path/to/db_dir query.txt", args[0]);
         process::exit(1);
     }
 
+    // Parse arguments
     let db_path = Path::new(&args[1]);
     let query_file_path = Path::new(&args[2]);
 
     // Setup TFHE configuration
     let config = ConfigBuilder::default().build();
     let (client_key, server_key) = generate_keys(config);
-    let clear_value = 123u8; // Example clear value
-    let encrypted_value = FheUint8::encrypt(clear_value, &client_key);
 
-    // Load the database
-    let db = match Database::load_from_directory(db_path) {
-        Ok(db) => db,
-        Err(e) => {
-            eprintln!("Failed to load database: {}", e);
-            process::exit(1);
-        }
-    };
+    // Load and encrypt the query
+    let encrypted_query = EncryptedQuery::encrypt_query(query_file_path, &client_key)?;
+    println!("Encrypted Query: {}", encrypted_query);
 
-    // Encrypt the query
-    let encrypted_query = encrypt_query(query_file_path, &client_key).unwrap();
+    // Load the database (simulated here; replace with actual function if available)
+    let db = Database::load_from_directory(db_path).unwrap();
 
-    // Run an FHE query (placeholder)
+    // Convert or access Tables from Database
+    let tables = db.to_tables().unwrap();
+
+    // Run an FHE query.
     let start = Instant::now();
-    let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &db);
+    let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &tables)?;
     let duration = start.elapsed();
 
     // Decrypt the result
-    let decrypted_result = decrypt_result(&client_key, &encrypted_result).unwrap();
+    let decrypted_result = decrypt_result(&client_key, &encrypted_result)?;
 
     println!("Runtime: {:.2?}", duration);
     println!("Encrypted DB query result: {}", decrypted_result);
     println!("Results match: YES");
+
+    Ok(())
 }
