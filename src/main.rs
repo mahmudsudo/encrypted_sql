@@ -85,7 +85,7 @@ impl fmt::Display for EncryptedQuery {
 }
 
 struct EncryptedResult {
-    result: Vec<u8>,
+    result: Vec<FheUint8>,
 }
 
 struct Tables {
@@ -174,34 +174,41 @@ fn load_tables(path: &Path, db: &Database) -> Result<Tables, AppError> {
 
 /// This function will process an `EncryptedQuery` on set of data stored in `Tables`.
 /// It will be able to execute basic SQL operations on the data in an encrypted form, and return an `Encrypted Result`.
-fn run_fhe_query(sks: &ServerKey, input: &EncryptedQuery, data: &Tables) -> Result<EncryptedResult, Box<dyn Error>> {
-    // 1. parse the encrypted query.
-    // 2. perform encryption operations on the data (maybe scan through tables, select specific rows, apply filters, etc).
-    // 3. return the encrypted result.
-
+fn run_fhe_query(
+    sks: &ServerKey,
+    input: &EncryptedQuery,
+    data: &Tables,
+) -> Result<EncryptedResult, Box<dyn Error>> {
     let mut results = Vec::new();
 
-    // Simulate processing: Here, I just iterate over tables and collect encrypted data.
+    // Example processing: collect encrypted data
     for (_table_name, rows) in &data.tables {
         for row in rows {
             for (_column, encrypted_value) in row {
-                results.push(encrypted_value.as_bytes());
+                // Assume encrypted_value is already an encrypted FheUint8
+                results.push(*encrypted_value);
             }
         }
     }
 
-    Ok(EncryptedResult {
-        result: results.concat(),
-    })
+    Ok(EncryptedResult { result: results })
 }
+
 
 fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
     let decrypted_data = encrypted_result.result.iter()
-        .map(|data| client_key.decrypt(data))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|enc_data| {
+            enc_data.decrypt(client_key)  // Call decrypt on the data type that supports it
+        })
+        .collect::<Result<Vec<u8>, _>>()?; // Collect into a Vec<u8> after decryption
 
-    Ok(format!("Decrypted results: {:?}", decrypted_data))
+    // Convert the decrypted bytes back into a readable string if applicable
+    let result_string = String::from_utf8(decrypted_data)
+        .map_err(|e| Box::new(e) as Box<dyn Error>); // Handle UTF-8 conversion errors
+
+    result_string
 }
+
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
