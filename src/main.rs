@@ -178,15 +178,18 @@ fn run_fhe_query(
     sks: &ServerKey,
     input: &EncryptedQuery,
     data: &Tables,
+    client_key: &ClientKey,  // Passing ClientKey here
 ) -> Result<EncryptedResult, Box<dyn Error>> {
-    let mut results = Vec::new();
+    let mut results: Vec<FheUint8> = Vec::new();
 
-    // Example processing: collect encrypted data
+    // Process the tables and encrypt values as needed
     for (_table_name, rows) in &data.tables {
         for row in rows {
-            for (_column, encrypted_value) in row {
-                // Assume encrypted_value is already an encrypted FheUint8
-                results.push(*encrypted_value);
+            for (_column, value) in row {
+                if let Ok(num) = value.parse::<u8>() {
+                    let encrypted_value = FheUint8::encrypt(num, client_key);
+                    results.push(encrypted_value);
+                }
             }
         }
     }
@@ -194,21 +197,25 @@ fn run_fhe_query(
     Ok(EncryptedResult { result: results })
 }
 
+fn value_to_encrypted(value: &str, client_key: &ClientKey) -> Option<FheUint8> {
+    value.parse::<u8>().ok().map(|num| FheUint8::encrypt(num, client_key))
+}
 
 fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
-    let decrypted_data = encrypted_result.result.iter()
-        .map(|enc_data| {
-            enc_data.decrypt(client_key)  // Call decrypt on the data type that supports it
-        })
-        .collect::<Result<Vec<u8>, _>>()?; // Collect into a Vec<u8> after decryption
+    // The result is expected to be a vector of FheUint8
+    let decrypted_data: Result<Vec<u8>, _> = encrypted_result.result.iter()
+        .map(|enc_data| enc_data.decrypt(client_key)) // Decrypt each piece of data
+        .collect(); // Collect results into a Result<Vec<u8>, _>
 
-    // Convert the decrypted bytes back into a readable string if applicable
-    let result_string = String::from_utf8(decrypted_data)
+    // Handle decryption errors
+    let decrypted_bytes = decrypted_data?;
+
+    // Convert the decrypted bytes back into a readable string.
+    let result_string = String::from_utf8(decrypted_bytes)
         .map_err(|e| Box::new(e) as Box<dyn Error>); // Handle UTF-8 conversion errors
 
     result_string
 }
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
@@ -237,7 +244,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Run an FHE query.
     let start = Instant::now();
-    let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &tables)?;
+    let encrypted_result = run_fhe_query(&server_key, &encrypted_query, &tables, &client_key)?;
     let duration = start.elapsed();
 
     // Decrypt the result
