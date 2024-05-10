@@ -202,13 +202,14 @@ fn value_to_encrypted(value: &str, client_key: &ClientKey) -> Option<FheUint8> {
 }
 
 fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
-    // The result is expected to be a vector of FheUint8
-    let decrypted_data: Result<Vec<u8>, _> = encrypted_result.result.iter()
-        .map(|enc_data| enc_data.decrypt(client_key)) // Decrypt each piece of data
-        .collect(); // Collect results into a Result<Vec<u8>, _>
+    let mut decrypted_bytes = Vec::new();
 
-    // Handle decryption errors
-    let decrypted_bytes = decrypted_data?;
+    for enc_data in &encrypted_result.result {
+        match enc_data.decrypt(client_key) {
+            Ok(byte) => decrypted_bytes.push(byte),
+            Err(e) => return Err(Box::new(e) as Box<dyn Error>),
+        }
+    }
 
     // Convert the decrypted bytes back into a readable string.
     let result_string = String::from_utf8(decrypted_bytes)
