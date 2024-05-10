@@ -178,11 +178,11 @@ fn run_fhe_query(
     sks: &ServerKey,
     input: &EncryptedQuery,
     data: &Tables,
-    client_key: &ClientKey,  // Passing ClientKey here
+    client_key: &ClientKey,
 ) -> Result<EncryptedResult, Box<dyn Error>> {
     let mut results: Vec<FheUint8> = Vec::new();
 
-    // Process the tables and encrypt values as needed
+    // Assuming data is prepared and parsing is correct.
     for (_table_name, rows) in &data.tables {
         for row in rows {
             for (_column, value) in row {
@@ -197,18 +197,15 @@ fn run_fhe_query(
     Ok(EncryptedResult { result: results })
 }
 
-fn value_to_encrypted(value: &str, client_key: &ClientKey) -> Option<FheUint8> {
-    value.parse::<u8>().ok().map(|num| FheUint8::encrypt(num, client_key))
-}
-
 fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) -> Result<String, Box<dyn Error>> {
     let mut decrypted_bytes = Vec::new();
 
+    // Directly decrypt each encrypted data byte
     for enc_data in &encrypted_result.result {
-        match enc_data.decrypt(client_key) {
-            Ok(byte) => decrypted_bytes.push(byte),
-            Err(e) => return Err(Box::new(e) as Box<dyn Error>),
-        }
+        // Ensure that decryption is called directly on FheUint8 types
+        let decrypted_byte = enc_data.decrypt(client_key)
+            .map_err(|e| Box::new(e))?; // Properly handle decryption errors
+        decrypted_bytes.push(decrypted_byte);
     }
 
     // Convert the decrypted bytes back into a readable string.
@@ -218,10 +215,11 @@ fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) ->
     result_string
 }
 
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} /path/to/db_dir query.txt", args[0]);
+        eprintln!("Usage: {} ./db_dir query.txt", args[0]);
         process::exit(1);
     }
 
