@@ -100,13 +100,13 @@ fn handle_selection(expr: &Expr, client_key: &ClientKey, encrypted_elements: &mu
     match expr {
         Expr::BinaryOp { left, op, right } => {
             // Handle binary operations (e.g., field = value, field < value)
-            encrypt_binary_op(left, op, right, client_key, encrypted_elements);
+            encrypt_binary_op(left, &op.to_string(), right, client_key, encrypted_elements);
         },
         Expr::UnaryOp { op, expr } => {
             // Specifically useful for NOT operations
-            if op == "NOT" {
+            if op.to_string() == "NOT" {
                 handle_selection(expr, client_key, encrypted_elements); // Recursive call for NOT expression
-                encrypted_elements.push(FheUint8::encrypt(op.as_str().as_bytes()[0], client_key));
+                encrypted_elements.push(FheUint8::encrypt(op.to_string().as_bytes()[0], client_key));
             }
         },
         Expr::InList { expr, list, .. } => {
