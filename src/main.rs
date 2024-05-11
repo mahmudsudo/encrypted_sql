@@ -5,6 +5,7 @@ use sqlparser::ast::{Expr, SelectItem, SetExpr, Statement, TableFactor};
 use std::error::Error;
 
 use std::{collections::HashMap, env, fmt, fs, fs::read_dir, path::Path, process, time::Instant};
+use sqlparser::ast;
 
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -113,13 +114,30 @@ fn handle_selection(expr: &Expr, client_key: &ClientKey, encrypted_elements: &mu
             // Handle IN operator with multiple possible values
             if let Expr::Identifier(ident) = &**expr {
                 for value in list {
-                    if let Expr::Value(number) = value {
-                        encrypted_elements.push(Fhe_in_encryption_logic_here);
+                    match value {
+                        Expr::Value(literal) => {
+                            match literal {
+                                ast::Value::Number(num_str, _) => {
+                                    if let Ok(num) = num_str.parse::<u8>() {
+                                        encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                                    }
+                                },
+                                // Handle other types of values as needed, e.g., strings
+                                ast::Value::SingleQuotedString(s) => {
+                                    for byte in s.bytes() {
+                                        encrypted_elements.push(FheUint8::encrypt(byte, client_key));
+                                    }
+                                },
+                                _ => {} // Add handling for other value types as necessary
+                            }
+                        },
+                        _ => {} // Ignore other expression types within IN list
                     }
                 }
-                encrypted_elements.push(FheUint8::encrypt("IN".as_bytes()[0], client_key));
+                encrypted_elements.push(FheUint8::encrypt("IN".as_bytes()[0], client_key)); // Symbolically represent the IN operation
             }
-        },
+        }
+        ,
         Expr::Between { expr, low, high, .. } => {
             // Handle BETWEEN operator
             encrypt_value(expr, client_key, encrypted_elements);
