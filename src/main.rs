@@ -276,22 +276,27 @@ fn run_fhe_query(
     data: &Tables,
     client_key: &ClientKey,
 ) -> Result<EncryptedResult, Box<dyn Error>> {
-    for el in input.encrypted_elements.iter(){
-        
-    }
     let mut results: Vec<FheUint8> = Vec::new();
 
     // Assuming data is prepared and parsing is correct.
-    for (_table_name, rows) in &data.tables {
+    for (table_name, rows) in &data.tables {
+        // We assume that the table name or columns might be encrypted depending on the query nature.
         for row in rows {
-            for (_column, value) in row {
+            // Implement logic to match encrypted query with table data
+            for (column, value) in row {
                 if let Ok(num) = value.parse::<u8>() {
+                    // Here, we would have logic to match the encrypted column names with those in the query,
+                    // and perform operations based on the encrypted operations stored in `input`.
                     let encrypted_value = FheUint8::encrypt(num, client_key);
                     results.push(encrypted_value);
                 }
             }
         }
     }
+
+    // The actual logic would depend heavily on how you store and interpret encrypted operations within `EncryptedQuery`.
+    // For example, you might have an encrypted representation of SQL operations like 'SELECT', 'WHERE', etc.,
+    // and you would need to interpret these operations here to apply them correctly on the encrypted data.
 
     Ok(EncryptedResult { result: results })
 }
