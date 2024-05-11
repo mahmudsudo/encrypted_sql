@@ -276,6 +276,9 @@ fn run_fhe_query(
     data: &Tables,
     client_key: &ClientKey,
 ) -> Result<EncryptedResult, Box<dyn Error>> {
+    for el in input.encrypted_elements.iter(){
+        
+    }
     let mut results: Vec<FheUint8> = Vec::new();
 
     // Assuming data is prepared and parsing is correct.
