@@ -24,11 +24,8 @@ struct EncryptedQuery {
 }
 
 impl EncryptedQuery {
-    // Encrypt a SQL query by parsing and encrypting its components
-    pub fn encrypt_query(
-        query_path: &Path,
-        client_key: &ClientKey,
-    ) -> Result<Self,()> {
+    // Encrypt a SQL query by parsing and its components.
+    pub fn encrypt_query(query_path: &Path, client_key: &ClientKey) -> Result<Self,()> {
         let query = fs::read_to_string(query_path).unwrap();
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, &query).unwrap();
@@ -38,42 +35,115 @@ impl EncryptedQuery {
         // Process different parts of the SQL query
         if let Some(Statement::Query(ref query)) = ast.first() {
             if let SetExpr::Select(ref select) = *query.body {
+                // Handling projection (SELECT)
                 for item in &select.projection {
                     match item {
-                        SelectItem::UnnamedExpr(x) => {
-                            match x {
-                                Expr::Identifier(el) => {
-                                    if let Ok(num) = el.value.parse::<u8>() {
-                                        encrypted_elements.push(FheUint8::encrypt(num, client_key));
-                                    }
+                        SelectItem::UnnamedExpr(expr) => match expr {
+                            Expr::Identifier(ident) => {
+                                if let Ok(num) = ident.value.parse::<u8>() {
+                                    encrypted_elements.push(FheUint8::encrypt(num, client_key));
                                 }
-                                Expr::Wildcard => {
-                                    encrypted_elements.push(FheUint8::encrypt(b'*', client_key));
-                                }
-                               _ => {}
-                            }
-                        }
-                        SelectItem::Wildcard(x) => {
-                            encrypted_elements.push(FheUint8::encrypt(b'*', client_key));
-                        }
+                            },
+                            Expr::Wildcard => {
+                                encrypted_elements.push(FheUint8::encrypt(b'*', client_key)); // Represent wildcard
+                            },
+                            _ => {}
+                        },
+                        SelectItem::Wildcard(_) => {
+                            encrypted_elements.push(FheUint8::encrypt(b'*', client_key)); // Represent wildcard
+                        },
                         _ => (),
                     }
                 }
-                for item in &select.from{
-                    if let TableFactor::Table { name ,.. } = &item.relation {
+
+                // Parsing FROM
+                for item in &select.from {
+                    if let TableFactor::Table { name, .. } = &item.relation {
                         if let Ok(num) = name.0[0].value.parse::<u8>() {
-                        encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                            encrypted_elements.push(FheUint8::encrypt(num, client_key));
                         }
+                    }
+                }
+                // Handling WHERE and logical operators
+                if let Some(selection) = &select.selection {
+                    match selection {
+                        Expr::BinaryOp { left, op, right } => {
+                            // Encrypt the identifiers in WHERE conditions
+                            if let Expr::Identifier(ident) = &**left {
+                                if let Ok(num) = ident.value.parse::<u8>() {
+                                    encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                                }
+                            }
+                            // This is a placeholder to represent the operation
+                            encrypted_elements.push(FheUint8::encrypt(op.to_string().as_bytes()[0], client_key));
+                        },
+                        _ => {}
+                    }
                 }
             }
         }
-        eprintln!("encryted query vector : done");
+
+        eprintln!("Encrypted query vector: done");
         Ok(EncryptedQuery { encrypted_elements })
-    }else {
-        Err(())
     }
 }
+
+// Handles different types of expressions found typically in a WHERE clause.
+fn handle_selection(expr: &Expr, client_key: &ClientKey, encrypted_elements: &mut Vec<FheUint8>) {
+    // Expr::InList and Expr::Between: Specific handlers for IN and BETWEEN SQL operators.
+    match expr {
+        Expr::BinaryOp { left, op, right } => {
+            // Handle binary operations (e.g., field = value, field < value)
+            encrypt_binary_op(left, op, right, client_key, encrypted_elements);
+        },
+        Expr::UnaryOp { op, expr } => {
+            // Specifically useful for NOT operations
+            if op == "NOT" {
+                handle_selection(expr, client_key, encrypted_elements); // Recursive call for NOT expression
+                encrypted_elements.push(FheUint8::encrypt(op.as_str().as_bytes()[0], client_key));
+            }
+        },
+        Expr::InList { expr, list, .. } => {
+            // Handle IN operator with multiple possible values
+            if let Expr::Identifier(ident) = &**expr {
+                for value in list {
+                    if let Expr::Value(number) = value {
+                        encrypted_elements.push(Fhe_in_encryption_logic_here);
+                    }
+                }
+                encrypted_elements.push(FheUint8::encrypt("IN".as_bytes()[0], client_key));
+            }
+        },
+        Expr::Between { expr, low, high, .. } => {
+            // Handle BETWEEN operator
+            encrypt_value(expr, client_key, encrypted_elements);
+            encrypt_value(low, client_key, encrypted_elements);
+            encrypt_value(high, client_key, encrypted_elements);
+            encrypted_elements.push(FheUint8::encrypt("BETWEEN".as_bytes()[0], client_key));
+        },
+        _ => {}
+    }
 }
+
+// Encrypts binary operations like comparisons.
+fn encrypt_binary_op(left: &Expr, op: &str, right: &Expr, client_key: &ClientKey, encrypted_elements: &mut Vec<FheUint8>) {
+    // Encrypt left and right based on their types
+    encrypt_value(left, client_key, encrypted_elements);
+    encrypt_value(right, client_key, encrypted_elements);
+    // Add the operator to encrypted_elements
+    encrypted_elements.push(FheUint8::encrypt(op.as_bytes()[0], client_key));
+}
+
+// Helper to encrypt a single value based on its type.
+fn encrypt_value(expr: &Expr, client_key: &ClientKey, encrypted_elements: &mut Vec<FheUint8>) {
+    if let Expr::Identifier(ident) = expr {
+        if let Ok(num) = ident.value.parse::<u8>() {
+            encrypted_elements.push(FheUint8::encrypt(num, client_key));
+        }
+    }
+    // Extend for other types as needed
+}
+
 impl fmt::Display for EncryptedQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for _el in self.encrypted_elements.iter(){
@@ -211,12 +281,10 @@ fn decrypt_result(client_key: &ClientKey, encrypted_result: &EncryptedResult) ->
     }
 
     // Convert the decrypted bytes back into a readable string.
-     // Handle UTF-8 conversion errors
-
+    // Handle UTF-8 conversion errors
     String::from_utf8(decrypted_bytes)
         .map_err(|e| Box::new(e) as Box<dyn Error>)
 }
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();

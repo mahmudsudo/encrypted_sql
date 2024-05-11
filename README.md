@@ -22,3 +22,11 @@ fn main() {
     let decrypted_value: u8 = encrypted_value.decrypt(&client_key).expect("Decryption failed");
 }
 ```
+
+- [ ] implement other SQL operations for bonus. Like JOINs.
+- [ ] Map SQL queries to encrypted operations
+- [ ] optimize for performance
+  - [ ] benchmark
+  - [ ] optimize the data access and manipulation
+- [ ] Write documentation
+- [ ] Clippy and lint checks: `cargo clippy -- --no-deps -D warnings`
