@@ -64,22 +64,28 @@ impl EncryptedQuery {
                         }
                     }
                 }
-                // Handling WHERE and logical operators
+
+                // Handle all logical operators.
                 if let Some(selection) = &select.selection {
-                    match selection {
-                        Expr::BinaryOp { left, op, right } => {
-                            // Encrypt the identifiers in WHERE conditions
-                            if let Expr::Identifier(ident) = &**left {
-                                if let Ok(num) = ident.value.parse::<u8>() {
-                                    encrypted_elements.push(FheUint8::encrypt(num, client_key));
-                                }
-                            }
-                            // This is a placeholder to represent the operation
-                            encrypted_elements.push(FheUint8::encrypt(op.to_string().as_bytes()[0], client_key));
-                        },
-                        _ => {}
-                    }
+                    handle_selection(selection, client_key, &mut encrypted_elements);
                 }
+
+                // Handling WHERE and logical operators
+                // if let Some(selection) = &select.selection {
+                //     match selection {
+                //         Expr::BinaryOp { left, op, right } => {
+                //             // Encrypt the identifiers in WHERE conditions
+                //             if let Expr::Identifier(ident) = &**left {
+                //                 if let Ok(num) = ident.value.parse::<u8>() {
+                //                     encrypted_elements.push(FheUint8::encrypt(num, client_key));
+                //                 }
+                //             }
+                //             // This is a placeholder to represent the operation
+                //             encrypted_elements.push(FheUint8::encrypt(op.to_string().as_bytes()[0], client_key));
+                //         },
+                //         _ => {}
+                //     }
+                // }
             }
         }
 
