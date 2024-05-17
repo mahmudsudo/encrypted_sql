@@ -9,11 +9,7 @@
 - [x] Implement SQL select, select distinct, where, and, or, not, in, and between operations for encrypted queries
 - [x] Manage operations for integers (<, <=, >, >=, =) and for strings (=).
 - [x] Manage operations for integers (+, -, *, /, %) and for strings (+).
-- [ ] Write unit tests for the implementations
-- [ ] Test with sample databases and SQL queries
-- [ ] Use AWS hardware for benchmarking: (CPU: hpc7a.96xlarge, GPU: p3.2xlarge).
-- [ ] Ensure your implementation can run with both multi bit and non-multi bit parameter sets
-- [ ] Prepare code for submission.
+
 
 
 ```rust
@@ -23,10 +19,3 @@ fn main() {
 }
 ```
 
-- [ ] implement other SQL operations for bonus. Like JOINs.
-- [ ] Map SQL queries to encrypted operations
-- [ ] optimize for performance
-  - [ ] benchmark
-  - [ ] optimize the data access and manipulation
-- [ ] Write documentation
-- [ ] Clippy and lint checks: `cargo clippy -- --no-deps -D warnings`
